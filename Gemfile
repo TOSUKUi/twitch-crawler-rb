@@ -69,3 +69,5 @@ end
 gem "twitch-chat", "~> 0.0.1"
 
 gem "twitch-api", "~> 1.0"
+
+gem "mysql2"
