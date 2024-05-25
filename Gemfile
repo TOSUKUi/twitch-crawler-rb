@@ -52,12 +52,19 @@ end
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
+  gem "rubocop"
+  gem "rubocop-rails"
+  gem "rubocop-performance"
+  gem "rubocop-rspec"
+  gem "debug"
 
   # Add speed badges [https://github.com/MiniProfiler/rack-mini-profiler]
   # gem "rack-mini-profiler"
 
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
+  gem "ruby-lsp"
+  gem "ruby-lsp-rails"
 end
 
 group :test do
@@ -66,6 +73,16 @@ group :test do
   gem "selenium-webdriver"
 end
 
-gem "twitch-chat", "~> 0.0.1"
+gem "net-irc"
 
-gem "twitch-api", "~> 1.0"
+
+gem "twitch-api"
+
+gem "mysql2"
+
+gem "redis"
+gem "activerecord-import"
+gem "rest-client"
+
+
+gem "rspec", "~> 3.13"
