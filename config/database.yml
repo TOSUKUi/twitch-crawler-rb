@@ -22,6 +22,7 @@ test:
 
 production:
   <<: *default
+  host: <%= ENV.fetch("DB_HOST") %>
   database: twitch_crawler
   username: twtich_crawler
-  password: <%= Rails.application.credentials.password %>
+  password: <%= ENV.fetch("DB_PASSWORD") %>
