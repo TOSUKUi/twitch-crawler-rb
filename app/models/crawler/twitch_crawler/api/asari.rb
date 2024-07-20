@@ -10,7 +10,7 @@ module Crawler
 
           private
           def asari_url
-            'localhost:8000'
+            ENV.fetch('ASARI_API_URL')
           end
         end
       end
