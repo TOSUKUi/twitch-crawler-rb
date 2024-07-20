@@ -45,10 +45,13 @@ ActiveRecord::Schema[7.1].define(version: 2024_03_09_095354) do
   end
 
   create_table "o_auth_tokens", charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
+    t.string "token_type"
+    t.string "scope"
     t.string "access_token"
-    t.string "oauth_token"
+    t.string "refresh_token"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["token_type", "scope"], name: "index_o_auth_tokens_on_token_type_and_scope"
   end
 
   create_table "streams", charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|

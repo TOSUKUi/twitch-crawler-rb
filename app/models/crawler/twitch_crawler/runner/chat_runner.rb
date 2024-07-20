@@ -3,16 +3,41 @@ module Crawler
     module Runner
       class ChatRunner < Base
         def run
-          channels = Stream.ongoing.pluck(:user_login).map { |c| "##{c}" }.join(',')
-          channle_stream_id_hash = Stream.ongoing.pluck(:user_login, :id).to_h { |c, id| [c, id] }
+          channel_crawling_threads = {}
+          loop do
+            ongoing_channels = Stream.ongoing.pluck(:user_login)
+            not_crawling_channels = ongoing_channels - channel_crawling_threads.keys
+            end_channels = channel_crawling_threads.keys - ongoing_channels
+            channle_stream_id_hash = Stream.ongoing.pluck(:user_login, :id).to_h { |c, id| [c, id] }
 
-          client = TwitchIRCClient.new('irc.chat.twitch.tv', '6667', {
-                                         nick:    'tosukuibot',
-                                         pass:    "oauth:#{api_client(token_type: :user,
-                                                                      scopes:     'chat:read chat:edit').tokens.access_token}",
-                                         channel: '#tosukui'
-                                       })
-          client.start_twitch(@before_folder, channle_stream_id_hash)
+            # 未収集チャンネルにJOIN
+            not_crawling_channels.each do |c|
+              th = Thread.new do
+                client = TwitchIRCClient.new('irc.chat.twitch.tv', '6667', {
+                                               nick:    ENV.fetch('TWITCH_BOT_NAME'),
+                                               pass:    "oauth:#{api_client(token_type: :user,
+                                                                            scopes:     'chat:edit chat:read').tokens.access_token}",
+                                               channel: "##{c}"
+                                             })
+                client.start_twitch(@before_folder, channle_stream_id_hash)
+              end
+              channel_crawling_threads[c] = th
+
+              # sleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
+              sleep(0.5)
+            end
+
+            # 終了チャンネルを見ているスレッドを停止
+            end_channels.each do |c|
+              channel_crawling_threads[c].exit
+            end
+
+            # とりまloopは1秒ごとに行う
+            sleep(1)
+            puts channel_crawling_threads
+          end
+        ensure
+          channel_crawling_threads.values.map(&:exit)
         end
 
         def parse_file(doing_path)
@@ -56,10 +81,6 @@ module Crawler
 
                 name = "on_#{(COMMANDS[m.command.upcase] || m.command).downcase}"
                 send(name, m) if respond_to?(name)
-              rescue Exception => e
-                warn e
-                warn e.backtrace.join("\r\t")
-                raise
               rescue Message::InvalidMessage
                 @log.error 'MessageParse: ' + l.inspect
               rescue StandardError => e
@@ -67,7 +88,7 @@ module Crawler
             end
           rescue IOError
           ensure
-            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}.json", @buffer.join)
+            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
             finish
           end
 
@@ -76,7 +97,12 @@ module Crawler
           end
 
           def on_pong(m)
+          end
 
+          def join_channel
+          end
+
+          def part_channel
           end
 
           def on_privmsg(m)
@@ -86,7 +112,7 @@ module Crawler
             @buffer << "#{mj.to_json}\n"
             return unless @buffer.length > 100
 
-            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}.json", @buffer.join)
+            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
             @buffer = []
           end
 

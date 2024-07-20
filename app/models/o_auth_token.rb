@@ -1,0 +1,2 @@
+class OAuthToken < ApplicationRecord
+end
