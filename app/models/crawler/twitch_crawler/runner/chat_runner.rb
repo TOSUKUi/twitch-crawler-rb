@@ -11,10 +11,11 @@ module Crawler
             channle_stream_id_hash = Stream.ongoing.pluck(:user_login, :id).to_h { |c, id| [c, id] }
 
             # 未収集チャンネルにJOIN
+            bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
             not_crawling_channels.each do |c|
               th = Thread.new do
                 client = TwitchIRCClient.new('irc.chat.twitch.tv', '6667', {
-                                               nick:    ENV.fetch('TWITCH_BOT_NAME'),
+                                               nick:    bot_name,
                                                pass:    "oauth:#{api_client(token_type: :user,
                                                                             scopes:     'chat:edit chat:read').tokens.access_token}",
                                                channel: "##{c}"
@@ -34,7 +35,6 @@ module Crawler
 
             # とりまloopは1秒ごとに行う
             sleep(1)
-            puts channel_crawling_threads
           end
         ensure
           channel_crawling_threads.values.map(&:exit)
@@ -75,7 +75,6 @@ module Crawler
               begin
                 m = twitch_message_parse(l)
 
-                puts l
                 next if m.nil?
                 next if on_message(m) === true
 

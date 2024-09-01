@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_03_09_095354) do
+ActiveRecord::Schema[7.1].define(version: 2024_09_01_092435) do
   create_table "chats", id: { type: :string, limit: 64 }, charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
     t.bigint "stream_id", null: false
     t.string "channel", null: false
@@ -18,10 +18,10 @@ ActiveRecord::Schema[7.1].define(version: 2024_03_09_095354) do
     t.integer "bits"
     t.datetime "ts", null: false
     t.text "text", null: false
-    t.string "emote_only"
+    t.boolean "emote_only"
     t.string "emotes"
     t.integer "posinega", limit: 1
-    t.string "user_id", limit: 36, null: false
+    t.bigint "user_id", null: false
     t.string "user_name", null: false
     t.string "user_display_name", null: false
     t.boolean "user_is_broadcaster", null: false
@@ -35,7 +35,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_03_09_095354) do
     t.string "user_flags"
     t.boolean "user_mod"
     t.boolean "user_returning_chatter"
-    t.string "user_room_id", limit: 36
+    t.bigint "user_room_id", null: false
     t.bigint "user_tmi_sent_ts"
     t.boolean "user_turbo"
     t.string "user_type"

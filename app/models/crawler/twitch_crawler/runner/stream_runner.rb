@@ -38,7 +38,7 @@ module Crawler
             Stream.where(id: ended_stream_ids).update(status: :stopped, ended_at: Time.zone.now)
             Stream.import insert_data, on_duplicate_key_update: duplicate_clause
           rescue StandardError => e
-            binding.irb
+            logger.error(e)
           end
 
           # 未存在の配信

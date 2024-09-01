@@ -13,6 +13,9 @@ module Crawler
       paths.each do |path|
         path.gsub!('before', 'doing')
         parse_file(path)
+        File.unlink(path)
+      rescue StandardError => e
+        logger.error(e)
       end
     end
 
