@@ -30,11 +30,17 @@ module Crawler
 
             # 終了チャンネルを見ているスレッドを停止
             end_channels.each do |c|
-              channel_crawling_threads[c].exit
+              channel_crawling_threads.delete(c)&.exit
             end
 
-            # とりまloopは1秒ごとに行う
-            sleep(1)
+            begin
+              c = Redis.new(host: 'localhost', port: 6379)
+              c.set(:running_channel, channel_crawling_threads.keys)
+            rescue StandardError => e
+            end
+
+            # とりまloopは10秒ごとに行う
+            sleep(10)
           end
         ensure
           channel_crawling_threads.values.map(&:exit)
