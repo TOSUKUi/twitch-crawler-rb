@@ -8,7 +8,7 @@ module Crawler
             ongoing_channels = Stream.ongoing.pluck(:user_login, :id)
             not_crawling_channels = ongoing_channels - channel_crawling_threads.keys
             end_channels = channel_crawling_threads.keys - ongoing_channels
-            channle_stream_id_hash = ongoing_channels.to_h { |c, id| [c, id] }
+            channle_stream_id_hash = ongoing_channels.to_h
 
             # 未収集チャンネルにJOIN
             bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
