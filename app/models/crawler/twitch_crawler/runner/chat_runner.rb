@@ -5,14 +5,14 @@ module Crawler
         def run
           channel_crawling_threads = {}
           loop do
-            ongoing_channels = Stream.ongoing.pluck(:user_login)
+            ongoing_channels = Stream.ongoing.pluck(:user_login, :id)
             not_crawling_channels = ongoing_channels - channel_crawling_threads.keys
             end_channels = channel_crawling_threads.keys - ongoing_channels
-            channle_stream_id_hash = Stream.ongoing.pluck(:user_login, :id).to_h { |c, id| [c, id] }
+            channle_stream_id_hash = ongoing_channels.to_h { |c, id| [c, id] }
 
             # 未収集チャンネルにJOIN
             bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
-            not_crawling_channels.each do |c|
+            not_crawling_channels.each do |c, id|
               th = Thread.new do
                 client = TwitchIRCClient.new('irc.chat.twitch.tv', '6667', {
                                                nick:    bot_name,
@@ -22,15 +22,15 @@ module Crawler
                                              })
                 client.start_twitch(@before_folder, channle_stream_id_hash)
               end
-              channel_crawling_threads[c] = th
+              channel_crawling_threads[[c, id]] = th
 
               # sleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
               sleep(0.5)
             end
 
             # 終了チャンネルを見ているスレッドを停止
-            end_channels.each do |c|
-              channel_crawling_threads.delete(c)&.exit
+            end_channels.each do |c, id|
+              channel_crawling_threads.delete([c, id])&.exit
             end
 
             begin
