@@ -1,7 +1,7 @@
 module Crawler
   class RunnerBase
     def initialize
-      %w[before doing].each do |status|
+      %w[before doing error].each do |status|
         instance_variable_set(:"@#{status}_folder", "#{save_folder_root}/#{status}")
         FileUtils.mkdir_p("#{save_folder_root}/#{status}")
       end
@@ -15,7 +15,8 @@ module Crawler
         parse_file(path)
         File.unlink(path)
       rescue StandardError => e
-        logger.error(e)
+        Rails.logger.error(e)
+        FileUtils.move(path, @error_folder)
       end
     end
 
