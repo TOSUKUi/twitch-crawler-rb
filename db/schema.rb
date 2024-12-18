@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_09_01_092435) do
+ActiveRecord::Schema[7.1].define(version: 2024_09_08_071840) do
   create_table "chats", id: { type: :string, limit: 64 }, charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
     t.bigint "stream_id", null: false
     t.string "channel", null: false
@@ -29,7 +29,39 @@ ActiveRecord::Schema[7.1].define(version: 2024_09_01_092435) do
     t.boolean "user_is_subscriber", null: false
     t.string "user_badge_info"
     t.string "user_badges"
-    t.string "user_client_nonce"
+    t.boolean "user_first_msg"
+    t.string "user_flags"
+    t.boolean "user_mod"
+    t.boolean "user_returning_chatter"
+    t.bigint "user_room_id", null: false
+    t.bigint "user_tmi_sent_ts"
+    t.boolean "user_turbo"
+    t.string "user_type"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["stream_id", "ts"], name: "index_chats_on_stream_id_and_ts"
+    t.index ["ts"], name: "index_chats_on_ts"
+    t.index ["user_id"], name: "index_chats_on_user_id"
+  end
+
+  create_table "chats_copy", id: { type: :string, limit: 64 }, charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
+    t.bigint "stream_id", null: false
+    t.string "channel", null: false
+    t.string "error"
+    t.integer "bits"
+    t.datetime "ts", null: false
+    t.text "text", null: false
+    t.boolean "emote_only"
+    t.string "emotes"
+    t.integer "posinega", limit: 1
+    t.bigint "user_id", null: false
+    t.string "user_name", null: false
+    t.string "user_display_name", null: false
+    t.boolean "user_is_broadcaster", null: false
+    t.boolean "user_is_moderator", null: false
+    t.boolean "user_is_subscriber", null: false
+    t.string "user_badge_info"
+    t.string "user_badges"
     t.string "user_color"
     t.boolean "user_first_msg"
     t.string "user_flags"
