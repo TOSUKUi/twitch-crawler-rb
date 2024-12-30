@@ -5,10 +5,22 @@ module Crawler
         def run
           channel_crawling_threads = {}
           loop do
-            ongoing_channels = Stream.ongoing.pluck(:user_login, :id)
-            not_crawling_channels = ongoing_channels - channel_crawling_threads.keys
-            end_channels = channel_crawling_threads.keys - ongoing_channels
-            channle_stream_id_hash = ongoing_channels.to_h
+            ongoing_channels = Stream.ongoing
+                                     .group_by(&:user_id)
+                                     .transform_values { |streams| streams.max_by(&:started_at) }
+                                     .values
+
+            user_login_id = ongoing_channels.pluck(:user_login, :id)
+            not_crawling_channels = user_login_id - channel_crawling_threads.keys
+            end_channels = channel_crawling_threads.keys - user_login_id
+            channle_stream_id_hash = user_login_id.to_h
+
+            # 終了チャンネルを見ているスレッドを停止
+            end_channels.each do |c, id|
+              channel_crawling_threads.delete([c, id])&.exit
+            end
+
+            # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する(そして次回再度収集)
 
             # 未収集チャンネルにJOIN
             bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
@@ -24,18 +36,15 @@ module Crawler
               end
               channel_crawling_threads[[c, id]] = th
 
-              # sleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
-              sleep(0.5)
+              # 0.7秒のsleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
+              sleep(0.7)
             end
 
-            # 終了チャンネルを見ているスレッドを停止
-            end_channels.each do |c, id|
-              channel_crawling_threads.delete([c, id])&.exit
-            end
+
+
 
             begin
-              c = Redis.new(host: 'localhost', port: 6379)
-              c.set(:running_channel, channel_crawling_threads.keys)
+              redis_client.set(:running_channel, channel_crawling_threads.keys)
             rescue StandardError => e
             end
 
@@ -61,6 +70,27 @@ module Crawler
             '/dev/shm/crawler/twitch/chat'
           else
             'spec/crawled_data/crawler/twitch/chat'
+          end
+        end
+
+
+
+        private
+
+        def redis_client
+          @redis_client ||= Redis.new(host: 'localhost', port: 6379)
+        end
+
+        def stream_stopped?(stream)
+          return false if stream.chats_subscribed_at.nil?
+
+          last_chatted_at = redis_client.get("last_chatted_at_#{stream.id}")
+          if stream.viewer_count > 300 # 300以下は無視
+            (last_chatted_at.nil? || last_chatted_at.to_time < 10.minutes.ago) && stream.chats_subscribed_at < 10.minutes.ago
+          elsif stream.viewer_count > 1000
+            (last_chatted_at.nil? || last_chatted_at.to_time < 5.minutes.ago) && stream.chats_subscribed_at < 10.minutes.ago
+          elsif stream.viewer_count > 3000
+            (last_chatted_at.nil? || last_chatted_at.to_time < 3.minutes.ago) && stream.chats_subscribed_at < 3.minutes.ago # 3分以上の頻度で監視する必要性は低いし、偽陽性を招く可能性があるため、無視する
           end
         end
 
@@ -97,6 +127,8 @@ module Crawler
             finish
           end
 
+
+
           def twitch_message_parse(l)
             Ext::Twitch::Chat::Message.new(l)
           end
@@ -113,8 +145,11 @@ module Crawler
           def on_privmsg(m)
             @buffer ||= []
             mj = m.as_json
-            mj['stream_id'] = @channle_stream_id_hash[mj['channel']]
+            stream_id = @channle_stream_id_hash[mj['channel']]
+            mj['stream_id'] = stream_id
             @buffer << "#{mj.to_json}\n"
+            c = Redis.new(host: 'localhost', port: 6379)
+            c.set(:"last_chatted_at_#{stream_id}", Time.zone.now.strftime('%F_%T'), ex: 10.minutes.to_i)
             return unless @buffer.length > 100
 
             File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)

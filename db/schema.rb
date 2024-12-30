@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_09_08_071840) do
+ActiveRecord::Schema[7.1].define(version: 2024_12_30_110115) do
   create_table "chats", id: { type: :string, limit: 64 }, charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
     t.bigint "stream_id", null: false
     t.string "channel", null: false
@@ -92,6 +92,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_09_08_071840) do
     t.boolean "is_mature", null: false
     t.integer "status", default: 1, null: false
     t.string "language", null: false
+    t.datetime "chats_subscribed_at"
     t.datetime "started_at", null: false
     t.datetime "ended_at"
     t.text "thumbnail_url", null: false
