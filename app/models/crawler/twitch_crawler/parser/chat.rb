@@ -23,8 +23,6 @@ module Crawler
               user_is_subscriber:     h['user']['is_subscriber'],
               user_badge_info:        h['user']['additional_info']['badge-info'],
               user_badges:            h['user']['additional_info']['badges'],
-              user_client_nonce:      h['user']['additional_info']['client-nonce'],
-              user_color:             h['user']['additional_info']['color'],
               user_first_msg:         h['user']['additional_info']['first-msg'] == '1',
               user_flags:             h['user']['additional_info']['flags'],
               user_mod:               h['user']['additional_info']['mod'] == '1',
