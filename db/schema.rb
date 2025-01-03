@@ -92,6 +92,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_30_110115) do
     t.boolean "is_mature", null: false
     t.integer "status", default: 1, null: false
     t.string "language", null: false
+    t.boolean "chats_subscribed", default: false, null: false
     t.datetime "chats_subscribed_at"
     t.datetime "started_at", null: false
     t.datetime "ended_at"
