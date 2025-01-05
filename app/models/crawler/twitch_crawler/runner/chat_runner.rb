@@ -4,7 +4,7 @@ module Crawler
       class ChatRunner < Base
         def run
           channel_crawling_threads = {}
-          Stream.ongoing.update_all(chats_subscribed_at: nil, chats_subscribed: nil)
+          Stream.ongoing.update_all(chats_subscribed_at: nil, chats_subscribed: false)
           loop do
             ongoing_channels = Stream.ongoing
                                      .group_by(&:user_id)
@@ -24,7 +24,7 @@ module Crawler
               channel_crawling_threads.delete(stream.id)&.exit unless stream.channel_subscribed_collectly?
             end
 
-            subscribe_channels = Stream.ongoing.not.chats_subscribed
+            subscribe_channels = Stream.ongoing.where(chats_subscribed: false)
 
             # 未収集チャンネルにJOIN
             bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
@@ -78,8 +78,6 @@ module Crawler
 
         private
 
-        def join_channel
-        end
 
         def redis_client
           @redis_client ||= Redis.new(host: 'localhost', port: 6379)
@@ -129,6 +127,7 @@ module Crawler
           end
 
           def join_channel
+            super
             stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
           end
 
@@ -138,13 +137,14 @@ module Crawler
           def on_privmsg(m)
             @buffer ||= []
             mj = m.as_json
+            puts mj
             mj['stream_id'] = @stream.id
-            @buffer << "#{mj.to_json}\n"
+            @buffer << "#{Oj.dump(mj, mode: :compat)}\n"
             c = Redis.new(host: 'localhost', port: 6379)
             c.set(:"stream_alive_flag_#{@stream.id}", true, ex: 10.minutes.to_i)
             return unless @buffer.length > 100
 
-            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
+            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join, encoding: 'UTF-8')
             @buffer = []
           end
 
