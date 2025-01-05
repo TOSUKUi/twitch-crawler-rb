@@ -3,6 +3,7 @@ module Crawler
     module Runner
       class ChatRunner < Base
         def run
+          channel_last_chat_times = {}
           channel_crawling_threads = {}
           Stream.ongoing.update_all(chats_subscribed_at: nil, chats_subscribed: false)
           loop do
@@ -22,8 +23,10 @@ module Crawler
 
             # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する
             subscribed_channels.each do |stream|
-              channel_crawling_threads.delete(stream.id)&.exit unless stream.channel_subscribed_collectly?
-              stream.update(chats_subscribed: false)
+              if channel_last_chat_times[stream.id] <= 10.minutes.ago
+                channel_crawling_threads.delete(stream.id)&.exit
+                stream.update(chats_subscribed: false)
+              end
             end
 
             subscribe_channels = Stream.ongoing.where(chats_subscribed: false)
@@ -38,7 +41,7 @@ module Crawler
                                                                             scopes:     'chat:edit chat:read').tokens.access_token}",
                                                channel: "##{stream.user_login}"
                                              })
-                client.start_twitch(@before_folder, stream)
+                client.start_twitch(@before_folder, stream, channel_last_chat_times)
               end
               stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
               channel_crawling_threads[stream.id] = th
@@ -46,7 +49,6 @@ module Crawler
               # 0.7秒のsleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
               sleep(0.7)
             end
-            stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
 
             begin
               redis_client.set(:running_channel, channel_crawling_threads.keys)
@@ -89,7 +91,8 @@ module Crawler
         end
 
         class TwitchIRCClient < Net::IRC::Client
-          def start_twitch(save_folder, stream)
+          def start_twitch(save_folder, stream, channel_last_chat_times)
+            @channel_last_chat_times = channel_last_chat_times
             @stream = stream
             @save_folder = save_folder
             @buffer = []
@@ -101,6 +104,7 @@ module Crawler
             post PASS, @opts.pass if @opts.pass
             post NICK, @opts.nick
             post 'JOIN', @opts.channel if @opts.channel
+            @channel_last_chat_times[stream.id] = Time.zone.now
             while l = @socket.gets
               begin
                 m = twitch_message_parse(l)
@@ -121,8 +125,6 @@ module Crawler
             finish
           end
 
-
-
           def twitch_message_parse(l)
             Ext::Twitch::Chat::Message.new(l)
           end
@@ -142,8 +144,7 @@ module Crawler
             mj = m.as_json
             mj['stream_id'] = @stream.id
             @buffer << "#{Oj.dump(mj, mode: :compat)}\n"
-            c = Redis.new(host: 'localhost', port: 6379)
-            c.set(:"stream_alive_flag_#{@stream.id}", true, ex: 10.minutes.to_i)
+            @channel_last_chat_times[@stream.id] = Time.zone.now
             return unless @buffer.length > 100
 
             File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
