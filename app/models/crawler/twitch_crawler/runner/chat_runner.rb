@@ -96,6 +96,7 @@ module Crawler
             post PASS, @opts.pass if @opts.pass
             post NICK, @opts.nick
             post 'JOIN', @opts.channel if @opts.channel
+            stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
             while l = @socket.gets
               begin
                 m = twitch_message_parse(l)
@@ -128,7 +129,6 @@ module Crawler
 
           def join_channel
             super
-            stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
           end
 
           def part_channel
@@ -143,7 +143,7 @@ module Crawler
             c.set(:"stream_alive_flag_#{@stream.id}", true, ex: 10.minutes.to_i)
             return unless @buffer.length > 100
 
-            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join, encoding: 'UTF-8')
+            File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
             @buffer = []
           end
 
