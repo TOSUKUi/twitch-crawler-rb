@@ -4,44 +4,45 @@ module Crawler
       class ChatRunner < Base
         def run
           channel_crawling_threads = {}
+          Stream.ongoing.update_all(chats_subscribed_at: nil, chats_subscribed: nil)
           loop do
             ongoing_channels = Stream.ongoing
                                      .group_by(&:user_id)
                                      .transform_values { |streams| streams.max_by(&:started_at) }
                                      .values
 
-            user_login_id = ongoing_channels.pluck(:user_login, :id)
-            not_crawling_channels = user_login_id - channel_crawling_threads.keys
-            end_channels = channel_crawling_threads.keys - user_login_id
-            channle_stream_id_hash = user_login_id.to_h
+            subscribed_channels = ongoing_channels.select { |stream| stream.chats_subscribed? }
+            ended_channels = Stream.chats_subscribed.not_ongoing
 
             # 終了チャンネルを見ているスレッドを停止
-            end_channels.each do |c, id|
-              channel_crawling_threads.delete([c, id])&.exit
+            ended_channels.each do |stream|
+              channel_crawling_threads.delete(stream.id)&.exit
             end
 
-            # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する(そして次回再度収集)
+            # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する
+            subscribed_channels.each do |stream|
+              channel_crawling_threads.delete(stream.id)&.exit unless stream.channel_subscribed_collectly?
+            end
+
+            subscribe_channels = Stream.ongoing.not.chats_subscribed
 
             # 未収集チャンネルにJOIN
             bot_name = ENV.fetch('TWITCH_BOT_NAME').dup
-            not_crawling_channels.each do |c, id|
+            subscribe_channels.each do |stream|
               th = Thread.new do
                 client = TwitchIRCClient.new('irc.chat.twitch.tv', '6667', {
                                                nick:    bot_name,
                                                pass:    "oauth:#{api_client(token_type: :user,
                                                                             scopes:     'chat:edit chat:read').tokens.access_token}",
-                                               channel: "##{c}"
+                                               channel: "##{stream.user_login}"
                                              })
-                client.start_twitch(@before_folder, channle_stream_id_hash)
+                client.start_twitch(@before_folder, stream)
               end
-              channel_crawling_threads[[c, id]] = th
+              channel_crawling_threads[stream.id] = th
 
               # 0.7秒のsleepをかます -> 20 authentication attempts per 10 seconds per user. from: https://dev.twitch.tv/docs/irc/#rate-limits
               sleep(0.7)
             end
-
-
-
 
             begin
               redis_client.set(:running_channel, channel_crawling_threads.keys)
@@ -77,26 +78,16 @@ module Crawler
 
         private
 
+        def join_channel
+        end
+
         def redis_client
           @redis_client ||= Redis.new(host: 'localhost', port: 6379)
         end
 
-        def stream_stopped?(stream)
-          return false if stream.chats_subscribed_at.nil?
-
-          last_chatted_at = redis_client.get("last_chatted_at_#{stream.id}")
-          if stream.viewer_count > 300 # 300以下は無視
-            (last_chatted_at.nil? || last_chatted_at.to_time < 10.minutes.ago) && stream.chats_subscribed_at < 10.minutes.ago
-          elsif stream.viewer_count > 1000
-            (last_chatted_at.nil? || last_chatted_at.to_time < 5.minutes.ago) && stream.chats_subscribed_at < 10.minutes.ago
-          elsif stream.viewer_count > 3000
-            (last_chatted_at.nil? || last_chatted_at.to_time < 3.minutes.ago) && stream.chats_subscribed_at < 3.minutes.ago # 3分以上の頻度で監視する必要性は低いし、偽陽性を招く可能性があるため、無視する
-          end
-        end
-
         class TwitchIRCClient < Net::IRC::Client
-          def start_twitch(save_folder, channle_stream_id_hash)
-            @channle_stream_id_hash = channle_stream_id_hash
+          def start_twitch(save_folder, stream)
+            @stream = stream
             @save_folder = save_folder
             @buffer = []
             # reset config
@@ -124,6 +115,7 @@ module Crawler
           rescue IOError
           ensure
             File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)
+            stream.update(chats_subscribed: false)
             finish
           end
 
@@ -137,6 +129,7 @@ module Crawler
           end
 
           def join_channel
+            stream.update(chats_subscribed_at: Time.zone.now, chats_subscribed: true)
           end
 
           def part_channel
@@ -145,11 +138,10 @@ module Crawler
           def on_privmsg(m)
             @buffer ||= []
             mj = m.as_json
-            stream_id = @channle_stream_id_hash[mj['channel']]
-            mj['stream_id'] = stream_id
+            mj['stream_id'] = @stream.id
             @buffer << "#{mj.to_json}\n"
             c = Redis.new(host: 'localhost', port: 6379)
-            c.set(:"last_chatted_at_#{stream_id}", Time.zone.now.strftime('%F_%T'), ex: 10.minutes.to_i)
+            c.set(:"stream_alive_flag_#{@stream.id}", true, ex: 10.minutes.to_i)
             return unless @buffer.length > 100
 
             File.write("#{@save_folder}/twitch_#{Time.zone.now.to_i}_#{@opts.channel}.json", @buffer.join)

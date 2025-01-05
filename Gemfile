@@ -65,6 +65,7 @@ group :development do
   # gem "spring"
   gem "ruby-lsp"
   gem "ruby-lsp-rails"
+  gem "standard"
 end
 
 group :test do
