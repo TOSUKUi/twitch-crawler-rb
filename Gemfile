@@ -87,3 +87,5 @@ gem "rest-client"
 
 
 gem "rspec", "~> 3.13"
+
+gem "oj", "~> 3.16"

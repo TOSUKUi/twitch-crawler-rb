@@ -137,7 +137,6 @@ module Crawler
           def on_privmsg(m)
             @buffer ||= []
             mj = m.as_json
-            puts mj
             mj['stream_id'] = @stream.id
             @buffer << "#{Oj.dump(mj, mode: :compat)}\n"
             c = Redis.new(host: 'localhost', port: 6379)
