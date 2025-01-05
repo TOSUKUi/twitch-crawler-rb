@@ -5,9 +5,9 @@ class Stream < ApplicationRecord
   scope :chats_subscribed, -> { where(chats_subscribed: true) }
 
   def channel_subscribed_collectly?
-    return true if !chats_subscribed? || chats_subscribed_at > 10.minutes.ago?
+    return true if !chats_subscribed? || chats_subscribed_at > 10.minutes.ago
 
-    redis_client.exists?("stream_alive_flag_#{stream_id}")
+    redis_client.exists?("stream_alive_flag_#{id}")
   end
 
   private
