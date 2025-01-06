@@ -24,10 +24,9 @@ module Crawler
           current_stream_ids = parsed_data.flatten.pluck(:id).map(&:to_i)
           ended_stream_ids = current_stream_in_db.pluck(:id) - current_stream_ids
 
-
           begin
-            Stream.where(id: ended_stream_ids).update(status: :stopped, ended_at: Time.zone.now)
             Stream.import insert_data, on_duplicate_key_update: duplicate_clause
+            Stream.where(id: ended_stream_ids).update_all(status: :stopped, ended_at: Time.zone.now)
           rescue StandardError => e
             logger.error(e)
           end
