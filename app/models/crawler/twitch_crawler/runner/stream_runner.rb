@@ -6,12 +6,8 @@ module Crawler
           cursor = nil
           ts = Time.zone.now.to_i
           f = File.open("#{@before_folder}/#{ts}.json", 'a')
-          2.times do |_i|
-            res = api_client.get_streams(language: 'ja', first: 100, after: cursor).raw
-            cursor = res.body['pagination']['cursor']
-            f.puts(res.body.to_json)
-            sleep(1)
-          end
+          res = api_client.get_streams(language: 'ja', first: 100).raw
+          f.puts(res.body.to_json)
         end
 
 
@@ -28,11 +24,6 @@ module Crawler
           current_stream_ids = parsed_data.flatten.pluck(:id).map(&:to_i)
           ended_stream_ids = current_stream_in_db.pluck(:id) - current_stream_ids
 
-          # DBにある配信であれば、2ページ目でも格納
-          db_ids = current_stream_in_db.pluck(:id)
-          insert_data += parsed_data[1].filter do |datum|
-            db_ids.include?(datum[:id].to_i)
-          end
 
           begin
             Stream.where(id: ended_stream_ids).update(status: :stopped, ended_at: Time.zone.now)
