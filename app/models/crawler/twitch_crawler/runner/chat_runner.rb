@@ -18,15 +18,16 @@ module Crawler
             # 終了チャンネルを見ているスレッドを停止
             ended_channels.each do |stream|
               channel_crawling_threads.delete(stream.id)&.exit
+              channel_last_chat_times.delete(stream.id)
               stream.update(chats_subscribed: false)
             end
 
             # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する
             subscribed_channels.each do |stream|
-              if channel_last_chat_times[stream.id] <= 10.minutes.ago
-                channel_crawling_threads.delete(stream.id)&.exit
-                stream.update(chats_subscribed: false)
-              end
+              next unless channel_last_chat_times[stream.id] <= 10.minutes.ago
+
+              channel_crawling_threads.delete(stream.id)&.exit
+              stream.update(chats_subscribed: false)
             end
 
             subscribe_channels = Stream.ongoing.where(chats_subscribed: false)
