@@ -24,7 +24,8 @@ module Crawler
 
             # すでにスレッドに登録されているのに、チャットの情報が受け取れていないチャンネルを終了する
             subscribed_channels.each do |stream|
-              next unless channel_last_chat_times[stream.id] <= 10.minutes.ago
+              next if channel_last_chat_times[stream.id].nil?
+              next if channel_last_chat_times[stream.id] > 10.minutes.ago
 
               channel_crawling_threads.delete(stream.id)&.exit
               stream.update(chats_subscribed: false)
