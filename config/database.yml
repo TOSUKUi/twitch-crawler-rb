@@ -22,7 +22,7 @@ test:
 
 production:
   <<: *default
-  host: <%= ENV.fetch("DB_HOST") %>
+  host: <%= ENV.fetch("DB_HOST", "hoge") %>
   database: twitch_crawler
   username: twtich_crawler
-  password: <%= ENV.fetch("DB_PASSWORD") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "hoge") %>
