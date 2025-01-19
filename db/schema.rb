@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_12_30_110115) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_18_101212) do
   create_table "chats", id: { type: :string, limit: 64 }, charset: "utf8mb4", collation: "utf8mb4_bin", force: :cascade do |t|
     t.bigint "stream_id", null: false
     t.string "channel", null: false
@@ -108,6 +108,13 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_30_110115) do
     t.string "tags", limit: 1024
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "video_id"
+    t.string "video_thumbnail_url"
+    t.string "video_url"
+    t.integer "video_view_count"
+    t.integer "video_duration"
+    t.datetime "video_created_at"
+    t.datetime "video_published_at"
   end
 
   add_foreign_key "chats", "streams"

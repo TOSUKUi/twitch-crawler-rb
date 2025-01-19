@@ -22,5 +22,16 @@ namespace :crawler do
         Crawler::TwitchCrawler::Runner::StreamRunner.new.parse
       end
     end
+
+    namespace :video do
+      desc 'videoを収集'
+      task run: :environment do
+        Crawler::TwitchCrawler::Runner::VideoRunner.new.run
+      end
+      desc 'videoを格納'
+      task parse: :environment do
+        Crawler::TwitchCrawler::Runner::VideoRunner.new.parse
+      end
+    end
   end
 end
