@@ -11,8 +11,8 @@ module Crawler
               video_url:           datum['url'],
               video_view_count:    datum['view_count'],
               video_duration:      parse_duration(datum['duration']),
-              video_created_at:    datum['created_at'].to_time.strftime('%F %T'),
-              video_published_at:  datum['published_at'].to_time.strftime('%F %T')
+              video_created_at:    Time.zone.parse(datum['created_at']).strftime('%F %T'),
+              video_published_at:  Time.zone.parse(datum['published_at']).strftime('%F %T')
             }
           end
         end
