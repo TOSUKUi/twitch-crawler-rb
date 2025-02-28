@@ -8,9 +8,10 @@ module Crawler
           ts = Time.zone.now.to_i
           streams = Stream.where(video_id: nil).where('updated_at > ?', 1.day.ago).select(:user_id).distinct
           streams.each do |stream|
-            res = api_client.get_videos(user_id: stream.user_id, first: 10).raw
+            res = api_client.get_videos(user_id: stream.user_id, first: 100).raw
             f = File.open("#{@before_folder}/#{stream.user_id}_#{ts}.json", 'a')
             f.puts(res.body.to_json)
+            f.close
             sleep(1)
           end
         end
