@@ -3,37 +3,78 @@ class Stream < ApplicationRecord
   has_many :chats
 
   scope :chats_subscribed, -> { where(chats_subscribed: true) }
+  # 新しい順 (開始時刻でソート)
+  scope :latest_first, -> { order(started_at: :desc) }
 
+  # 配信時間を計算 (秒)
+  def duration_seconds
+    return nil unless started_at && ended_at
 
-  def generate_analytics(start_date: nil, end_date: nil)
-    chats_scope = chats
-    chats_scope = chats_scope.where(ts: start_date..end_date) if start_date && end_date
-
-    unique_chatters = chats_scope.distinct.count(:user_id)
-
-    {
-      video_id:,
-      stream_id:                id,
-      engagement_rate:          calculate_engagement_rate(unique_chatters),
-      chat_density:             calculate_chat_density(chats_scope),
-      chat_timeseries:          calculate_chat_timeseries(chats_scope),
-      returning_chatters_ratio: calculate_returning_ratio(chats_scope),
-      moderator_activity:       generate_moderator_stats(chats_scope),
-      # emote_usage:              generate_emote_stats(chats_scope)
-    }
+    (ended_at - started_at).to_i
   end
 
-  def generate_metrics(interval:)
-    interval_seconds = case interval
-                       when 'minute' then 60
-                       when 'hour' then 3600
-                       when 'day' then 86400
-                       end
-
-    {
-      stream_id:   id,
-      time_series: generate_time_series(interval_seconds)
+  def summary_details
+    details = {
+      id:,
+      title:,
+      user_id:,
+      user_login:,
+      user_name:,
+      game_id:,
+      game_name:,
+      language:,
+      started_at:       started_at&.iso8601,
+      ended_at:         ended_at&.iso8601,
+      duration_seconds:, # 計算した配信時間
+      max_viewer:,
+      # video_* カラムは video が存在すれば追加
     }
+    if video_id.present?
+      details.merge!({
+                       video_id:,
+                       video_url:,
+                       video_thumbnail_url:,
+                       video_view_count:,
+                       video_duration:, # Twitch提供の動画時間
+                       video_created_at:    video_created_at&.iso8601,
+                       video_published_at:  video_published_at&.iso8601,
+                     })
+    end
+  end
+
+  def analyze_volume_and_sentiment(start_time:, end_time:, interval_sec:)
+    # interval_sec を使ってタイムスタンプをグルーピングするキーを生成
+    # FLOOR(UNIX_TIMESTAMP(ts) / interval_sec) は、指定した秒数間隔で時刻を丸める
+    time_group_sql = "FLOOR(UNIX_TIMESTAMP(ts) / #{interval_sec.to_i})"
+
+    select_sql = <<~SQL.squish
+      #{time_group_sql} AS time_group,
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN posinega = 1 THEN 1 ELSE 0 END) AS positive_count,
+      SUM(CASE WHEN posinega = -1 THEN 1 ELSE 0 END) AS negative_count,
+      SUM(CASE WHEN posinega = 0 THEN 1 ELSE 0 END) AS neutral_count
+    SQL
+    # index(stream_id, ts) を利用して絞り込み、集計
+    results = chats
+              .where(ts: start_time..end_time)
+              .select(select_sql)
+              .group('time_group')
+              .order('time_group ASC')
+
+    # 結果を整形
+    # results は ActiveRecord_Relation オブジェクトで、各要素が time_group, total_count などを持つ
+    results.map do |result|
+      # time_group は UNIXタイムスタンプを interval_sec で割って floor した値なので、
+      # interval_sec を掛けて元の時間範囲の開始時刻に戻す
+      timestamp = result.time_group * interval_sec
+      {
+        time:     Time.at(timestamp).iso8601,
+        count:    result.total_count, # チャット総数
+        positive: result.positive_count || 0, # 結果がなければ 0 に
+        negative: result.negative_count || 0,
+        neutral:  result.neutral_count || 0
+      }
+    end
   end
 
   private
@@ -51,114 +92,6 @@ class Stream < ApplicationRecord
     chats_scope.count.to_f / duration
   end
 
-  def calculate_chat_timeseries(chats_scope)
-    chats_scope.select('DATE_FORMAT(ts, "%Y-%m-%d %H%i") as ts, COUNT(`posinega` = 0 OR NULL) as neutral, COUNT(`posinega` > 0 OR NULL) as positive, COUNT(`posinega` < 0  OR NULL) as negative').group('ts')
-  end
 
-  def calculate_returning_ratio(chats_scope)
-    total_chatters = chats_scope.distinct.count(:user_id)
-    return 0 if total_chatters.zero?
-
-    returning_chatters = chats_scope.where(user_returning_chatter: true).distinct.count(:user_id)
-    (returning_chatters.to_f / total_chatters) * 100
-  end
-
-  def generate_moderator_stats(chats_scope)
-    mod_chats = chats_scope.where(user_is_moderator: true)
-    {
-      message_count:   mod_chats.count,
-      influence_score: calculate_mod_influence(mod_chats)
-    }
-  end
-
-  def generate_emote_stats(chats_scope)
-    chats_scope.where.not(emotes: nil).map do |chat|
-      next if chat.emotes.blank?
-
-      emotes = chat.emotes.split(',')
-      emotes.map do |emote|
-        {
-          emote_id:    emote,
-          usage_count: chats_scope.where('emotes LIKE ?', "%#{emote}%").count,
-          usage_ratio: calculate_emote_ratio(emote, chats_scope)
-        }
-      end
-    end.compact.flatten.uniq { |e| e[:emote_id] }
-  end
-
-  def generate_community_stats(chats_scope)
-    total_chatters = chats_scope.distinct.count(:user_id)
-    {
-      subscriber_ratio:    calculate_subscriber_ratio(chats_scope, total_chatters),
-      new_chatter_ratio:   calculate_new_chatter_ratio(chats_scope, total_chatters),
-      badge_distribution:  generate_badge_distribution(chats_scope),
-      interaction_network: generate_interaction_network(chats_scope)
-    }
-  end
-
-  def generate_time_series(interval_seconds)
-    result = []
-    current_time = started_at
-    end_time = ended_at || Time.current
-
-    while current_time < end_time
-      next_time = current_time + interval_seconds.seconds
-      period_chats = chats.where(ts: current_time..next_time)
-
-      result << {
-        timestamp:       current_time,
-        viewer_count:,
-        chat_count:      period_chats.count,
-        sentiment_score: calculate_sentiment_score(period_chats)
-      }
-
-      current_time = next_time
-    end
-
-    result
-  end
-
-  def calculate_mod_influence(mod_chats)
-    return 0 if chats.count.zero?
-
-    (mod_chats.count.to_f / chats.count) * 100
-  end
-
-  def calculate_emote_ratio(emote, chats_scope)
-    total_chats = chats_scope.count.to_f
-    return 0 if total_chats.zero?
-
-    chats_scope.where('emotes LIKE ?', "%#{emote}%").count / total_chats * 100
-  end
-
-  def calculate_subscriber_ratio(chats_scope, total_chatters)
-    return 0 if total_chatters.zero?
-
-    subscriber_count = chats_scope.where(user_is_subscriber: true).distinct.count(:user_id)
-    (subscriber_count.to_f / total_chatters) * 100
-  end
-
-  def calculate_new_chatter_ratio(chats_scope, total_chatters)
-    return 0 if total_chatters.zero?
-
-    new_chatters = chats_scope.where(user_first_msg: true).distinct.count(:user_id)
-    (new_chatters.to_f / total_chatters) * 100
-  end
-
-  def generate_badge_distribution(chats_scope)
-    chats_scope.where.not(user_badges: nil).group(:user_badges).count
-  end
-
-  def calculate_influencer_score(nodes, edges)
-    return 0 if nodes.zero?
-
-    (edges.to_f / nodes) * 100
-  end
-
-  def calculate_sentiment_score(period_chats)
-    return 0 if period_chats.empty?
-
-    period_chats.average(:posinega).to_f
-  end
 
 end

@@ -13,8 +13,8 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :streams, only: %i[index show] do
         member do
-          get 'analytics'
-          get 'metrics'
+          get :details
+          get :time_series
         end
       end
     end

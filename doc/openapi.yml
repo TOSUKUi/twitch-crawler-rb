@@ -1,252 +1,370 @@
 openapi: 3.0.0
 info:
-  title: Stream Analytics API
-  version: 1.0.0
-  description: Stream and chat analytics API for analyzing streaming data
-
+  title: Twitch Chat Analysis API
+  description: API for retrieving Twitch stream archives, details, and time series chat analysis.
+  version: 1.0.1 # バージョン更新
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Development server
+  - url: http://localhost:3000/api/v1
+  # - url: https://your-production-domain.com/api/v1
 
 tags:
-  - name: analytics
-    description: Stream analytics endpoints
-  - name: metrics
-    description: Streaming metrics endpoints
+  - name: Streams
+    description: Operations related to streams and their analysis
 
 paths:
   /streams:
     get:
       tags:
-        - streams
-      summary: List all streams
-      operationId: listStreams
+        - Streams
+      summary: Get a list of recent archived streams
+      description: Retrieves a paginated list of streams that have ended, ordered by start time descending.
+      operationId: listArchivedStreams
+      parameters:
+        - name: page
+          in: query
+          description: Page number to retrieve.
+          required: false
+          schema:
+            type: integer
+            example: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of streams to retrieve per page.
+          required: false
+          schema:
+            type: integer
+            example: 20
+            default: 20
       responses:
         '200':
-          description: Successful operation
+          description: A list of archived streams with pagination metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  streams:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StreamSummary'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        # 400などのエラーレスポンスも必要に応じて追加
+
+  /streams/{stream_id}/details: # ★★★ 新規追加セクション ★★★
+    get:
+      tags:
+        - Streams
+      summary: Get detailed information for a specific stream
+      description: Retrieves detailed information about a single stream, including video details if available.
+      operationId: getStreamDetails
+      parameters:
+        - name: stream_id
+          in: path
+          description: ID of the stream to retrieve details for.
+          required: true
+          schema:
+            type: integer # bigintの場合は number または integer + format: int64
+            format: int64
+            example: 314241763187
+      responses:
+        '200':
+          description: Detailed information about the stream.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamDetails' # 新しいスキーマを参照
+              example:
+                id: 314241763187
+                title: "24時にはねる"
+                user_id: 545050196
+                user_login: "kato_junichi0817"
+                user_name: "加藤純一うん〇ちゃん"
+                game_id: 509658
+                game_name: "Just Chatting"
+                language: "ja"
+                started_at: "2025-04-12T22:56:01.000+09:00" # ISO8601形式に統一推奨
+                ended_at: "2025-04-13T00:45:04.000+09:00"   # ISO8601形式に統一推奨
+                duration_seconds: 6543
+                max_viewer: 26647
+                video_id: "2430873630"
+                video_url: "https://www.twitch.tv/videos/2430873630"
+                video_thumbnail_url: "https://vod-secure.twitch.tv/_404/404_processing_%{width}x%{height}.png"
+                video_view_count: 25
+                video_duration: 907
+                video_created_at: "2025-04-12T22:56:07.000+09:00" # ISO8601形式に統一推奨
+                video_published_at: "2025-04-12T22:56:07.000+09:00" # ISO8601形式に統一推奨
+        '404':
+          description: Not Found - Stream with the specified ID not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /streams/{stream_id}/time_series:
+    get:
+      tags:
+        - Streams
+      summary: Get time series chat volume and sentiment analysis for a stream
+      description: Retrieves the total chat count and positive/negative/neutral counts aggregated over time intervals for a specific stream within a given time range.
+      operationId: getStreamTimeSeries
+      parameters:
+        - name: stream_id
+          in: path
+          description: ID of the stream to analyze.
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 314241763187
+        - name: start_time
+          in: query
+          description: Start time for the analysis range in ISO8601 format.
+          required: true
+          schema:
+            type: string
+            format: date-time
+            example: "2025-04-12T22:56:01Z"
+        - name: end_time
+          in: query
+          description: End time for the analysis range in ISO8601 format. Must be after start_time.
+          required: true
+          schema:
+            type: string
+            format: date-time
+            example: "2025-04-13T00:45:04Z"
+        - name: interval
+          in: query
+          description: Time interval for aggregation. Defaults to 'minute'.
+          required: false
+          schema:
+            type: string
+            enum: [10sec, 30sec, minute, 1min, hour, 1h]
+            default: minute
+            example: 1h
+      responses:
+        '200':
+          description: Time series analysis data.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Stream'
-
-  /streams/{streamId}:
-    get:
-      tags:
-        - streams
-      summary: Get stream details
-      operationId: getStreamDetails
-      parameters:
-        - name: streamId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: Successful operation
+                  $ref: '#/components/schemas/TimeSeriesData'
+        '400':
+          description: Bad Request - Invalid parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Stream'
-  /streams/{streamId}/analytics:
-    get:
-      tags:
-        - analytics
-      summary: Get stream analytics
-      operationId: getStreamAnalytics
-      parameters:
-        - name: streamId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: start_date
-          in: query
-          description: Analysis start date
-          schema:
-            type: string
-            format: date-time
-        - name: end_date
-          in: query
-          description: Analysis end date
-          schema:
-            type: string
-            format: date-time
-      responses:
-        '200':
-          description: Successful operation
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not Found - Stream with the specified ID not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StreamAnalytics'
-
-  /streams/{streamId}/metrics:
-    get:
-      tags:
-        - metrics
-      summary: Get stream metrics
-      operationId: getStreamMetrics
-      parameters:
-        - name: streamId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: interval
-          in: query
-          description: Time interval for metrics aggregation
-          schema:
-            type: string
-            enum: [minute, hour, day]
-            default: hour
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StreamMetrics'
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
-    StreamAnalytics:
-      type: object
-      properties:
-        stream_id:
-          type: integer
-          format: int64
-        engagement_rate:
-          type: number
-          format: float
-        chat_density:
-          type: number
-          format: float
-        returning_chatters_ratio:
-          type: number
-          format: float
-        moderator_activity:
-          type: object
-          properties:
-            message_count:
-              type: integer
-            influence_score:
-              type: number
-              format: float
-
-    StreamMetrics:
-      type: object
-      properties:
-        stream_id:
-          type: integer
-          format: int64
-        time_series:
-          type: array
-          items:
-            type: object
-            properties:
-              timestamp:
-                type: string
-                format: date-time
-              viewer_count:
-                type: integer
-              chat_count:
-                type: integer
-              sentiment_score:
-                type: number
-                format: float
-              chat_timeseries:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    ts:
-                      type: string
-                      format: date-time
-                    neutral:
-                      type: integer
-                    positive:
-                      type: integer
-                    negative:
-                      type: integer
-                    id:
-                      type: string
-                      nullable: true
-    Stream:
+    StreamSummary: # 既存のスキーマ (変更なし)
       type: object
       properties:
         id:
           type: integer
           format: int64
-        game_id:
-          type: integer
-          format: int64
+          description: Unique identifier for the stream.
+        title:
+          type: string
+          description: Title of the stream.
+        user_name:
+          type: string
+          description: Display name of the broadcaster.
         game_name:
           type: string
-        is_mature:
-          type: boolean
-        status:
-          type: string
-        language:
-          type: string
-        chats_subscribed:
-          type: boolean
-        chats_subscribed_at:
-          type: string
-          format: date-time
+          description: Name of the game being played.
+        max_viewer:
+          type: integer
+          description: Maximum concurrent viewers during the stream.
         started_at:
           type: string
           format: date-time
+          description: Timestamp when the stream started (ISO8601 format).
         ended_at:
           type: string
           format: date-time
-        thumbnail_url:
+          description: Timestamp when the stream ended (ISO8601 format).
+        video_id:
           type: string
+          nullable: true
+          description: ID of the associated VOD, if available.
+        video_url:
+          type: string
+          nullable: true
+          format: url
+          description: URL of the associated VOD, if available.
+        video_thumbnail_url:
+          type: string
+          nullable: true
+          format: url
+          description: Thumbnail URL of the associated VOD, if available.
+        video_view_count:
+          type: integer
+          nullable: true
+          description: View count of the associated VOD, if available.
+        video_duration:
+          type: integer
+          nullable: true
+          description: Duration of the associated VOD in seconds, if available.
+      required:
+        - id
+        - title
+        - user_name
+        - game_name
+        - max_viewer
+        - started_at
+        - ended_at
+
+    StreamDetails: # ★★★ 新規追加スキーマ ★★★
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the stream.
         title:
           type: string
-        data_type:
-          type: string
+          description: Title of the stream.
         user_id:
           type: integer
           format: int64
+          description: Unique identifier for the broadcaster user.
         user_login:
           type: string
+          description: Login name of the broadcaster.
         user_name:
           type: string
+          description: Display name of the broadcaster.
+        game_id:
+          type: integer
+          description: Unique identifier for the game category.
+        game_name:
+          type: string
+          description: Name of the game being played.
+        language:
+          type: string
+          description: Language of the stream (e.g., "ja").
+        started_at:
+          type: string
+          format: date-time
+          description: Timestamp when the stream started (ISO8601 format).
+        ended_at:
+          type: string
+          format: date-time
+          description: Timestamp when the stream ended (ISO8601 format).
+        duration_seconds:
+          type: integer
+          description: Calculated duration of the stream in seconds (ended_at - started_at).
         max_viewer:
           type: integer
-        viewer_count:
-          type: integer
-        tag_ids:
-          type: array
-          items:
-            type: string
-          nullable: true
-        tags:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
+          description: Maximum concurrent viewers during the stream.
         video_id:
           type: string
-        video_thumbnail_url:
-          type: string
+          nullable: true
+          description: ID of the associated VOD, if available.
         video_url:
           type: string
+          nullable: true
+          format: url
+          description: URL of the associated VOD, if available.
+        video_thumbnail_url:
+          type: string
+          nullable: true
+          format: url
+          description: Thumbnail URL of the associated VOD, if available.
         video_view_count:
           type: integer
+          nullable: true
+          description: View count of the associated VOD, if available.
         video_duration:
           type: integer
+          nullable: true
+          description: Duration of the associated VOD provided by Twitch in seconds, if available.
         video_created_at:
           type: string
           format: date-time
+          nullable: true
+          description: Timestamp when the VOD was created (ISO8601 format), if available.
         video_published_at:
           type: string
           format: date-time
+          nullable: true
+          description: Timestamp when the VOD was published (ISO8601 format), if available.
+      required: # APIが必ず返すであろうフィールドを指定
+        - id
+        - title
+        - user_id
+        - user_login
+        - user_name
+        - game_id
+        - game_name
+        - language
+        - started_at
+        - ended_at
+        - duration_seconds
+        - max_viewer
+
+    PaginationMeta: # 既存のスキーマ (変更なし)
+      type: object
+      properties:
+        current_page:
+          type: integer
+        next_page:
+          type: integer
+          nullable: true
+        prev_page:
+          type: integer
+          nullable: true
+        total_pages:
+          type: integer
+        total_count:
+          type: integer
+      required:
+        - current_page
+        - total_pages
+        - total_count
+
+    TimeSeriesData: # 既存のスキーマ (変更なし)
+      type: object
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: Start timestamp of the time interval (ISO8601 format).
+        count:
+          type: integer
+          description: Total number of chat messages in this interval.
+        positive:
+          type: integer
+          description: Number of positive chat messages in this interval.
+        negative:
+          type: integer
+          description: Number of negative chat messages in this interval.
+        neutral:
+          type: integer
+          description: Number of neutral chat messages in this interval.
+      required:
+        - time
+        - count
+        - positive
+        - negative
+        - neutral
+
+    Error: # 既存のスキーマ (変更なし)
+      type: object
+      properties:
+        error:
+          type: string
+          description: A message describing the error.
+      required:
+        - error

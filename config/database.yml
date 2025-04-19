@@ -12,8 +12,7 @@ default: &default
 development:
   <<: *default
   database: twitch_crawler_development
-  host: 127.0.0.1
-
+  host: worker2
 
 test:
   <<: *default
