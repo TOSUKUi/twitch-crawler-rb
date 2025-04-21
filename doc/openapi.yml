@@ -88,6 +88,7 @@ paths:
                 ended_at: "2025-04-13T00:45:04.000+09:00"   # ISO8601形式に統一推奨
                 duration_seconds: 6543
                 max_viewer: 26647
+                chat_count: 1000
                 video_id: "2430873630"
                 video_url: "https://www.twitch.tv/videos/2430873630"
                 video_thumbnail_url: "https://vod-secure.twitch.tv/_404/404_processing_%{width}x%{height}.png"
@@ -268,6 +269,9 @@ components:
         max_viewer:
           type: integer
           description: Maximum concurrent viewers during the stream.
+        chat_count:
+          type: integer
+          description: Total chat count
         video_id:
           type: string
           nullable: true

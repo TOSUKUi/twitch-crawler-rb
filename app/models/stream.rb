@@ -27,6 +27,7 @@ class Stream < ApplicationRecord
       ended_at:         ended_at&.iso8601,
       duration_seconds:, # 計算した配信時間
       max_viewer:,
+      chat_count:       chats.count
       # video_* カラムは video が存在すれば追加
     }
     if video_id.present?
@@ -45,7 +46,7 @@ class Stream < ApplicationRecord
   def analyze_volume_and_sentiment(start_time:, end_time:, interval_sec:)
     # interval_sec を使ってタイムスタンプをグルーピングするキーを生成
     # FLOOR(UNIX_TIMESTAMP(ts) / interval_sec) は、指定した秒数間隔で時刻を丸める
-    time_group_sql = "FLOOR(UNIX_TIMESTAMP(ts) / #{interval_sec.to_i})"
+    time_group_sql = "FLOOR(UNIX_TIMESTAMP(ts - INTERVAL 9 hour) / #{interval_sec.to_i})"
 
     select_sql = <<~SQL.squish
       #{time_group_sql} AS time_group,
@@ -67,6 +68,8 @@ class Stream < ApplicationRecord
       # time_group は UNIXタイムスタンプを interval_sec で割って floor した値なので、
       # interval_sec を掛けて元の時間範囲の開始時刻に戻す
       timestamp = result.time_group * interval_sec
+      time = (Time.zone.at(timestamp) - start_time).negative? ? 0 : Time.zone.at(timestamp) - start_time
+
       {
         time:     Time.at(timestamp).iso8601,
         count:    result.total_count, # チャット総数
